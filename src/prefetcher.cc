@@ -27,8 +27,8 @@ static std::vector<DCPT_Entry *> List_of_Entries;
 
 static std::vector<Addr> Delta_Correlation(DCPT_Entry *);
 static std::vector<Addr> Prefetch_Filtering(DCPT_Entry *, std::vector<Addr>);
-static bool Delta_Address_Calculation_is_Nonzero(AccessStat);
-static void Delta_Address_Store_in_Buffer(AccessStat, Addr);
+static bool Delta_Address_Calculation_is_Nonzero(Addr);
+static void Delta_Address_Store_in_Buffer(Addr, Addr);
 static DCPT_Entry* Create_New_Entry(AccessStat);
 static void Store_New_Entry(DCPT_Entry *);
 
@@ -65,7 +65,7 @@ void prefetch_access(AccessStat stat)
         entry = Create_New_Entry(stat);
         Store_New_Entry(entry);
     }
-    else if(Delta_Address_Calculation_is_Nonzero(stat)){
+    else if(Delta_Address_Calculation_is_Nonzero(stat.mem_addr)){
         Candidates = Delta_Correlation(entry);
         Prefetches = Prefetch_Filtering(entry, Candidates);
 
@@ -140,20 +140,20 @@ static std::vector<Addr> Prefetch_Filtering(DCPT_Entry *entry, std::vector<Addr>
     return Prefetches;
 }
 
-static bool Delta_Address_Calculation_is_Nonzero(AccessStat stat)
+static bool Delta_Address_Calculation_is_Nonzero(Addr mem_addr)
 {
-    Addr Delta_Address = stat.mem_addr - entry->Last_Address;
+    Addr Delta_Address = mem_addr - entry->Last_Address;
     Delta_Address /= BLOCK_SIZE >> 1;
     if(Delta_Address != 0)
     {
-        Delta_Address_Store_in_Buffer(stat, Delta_Address);
+        Delta_Address_Store_in_Buffer(mem_addr, Delta_Address);
         return true;
     }
     else
         return false;
 }
 
-static void Delta_Address_Store_in_Buffer(AccessStat stat, Addr Delta_Address)
+static void Delta_Address_Store_in_Buffer(Addr mem_addr, Addr Delta_Address)
 {
     if(Delta_Address > DELTA_MAX_VALUE)
         Delta_Address = 0;
@@ -162,7 +162,7 @@ static void Delta_Address_Store_in_Buffer(AccessStat stat, Addr Delta_Address)
         entry->deltas.pop_front();
     
     entry->deltas.push_back(Delta_Address);
-    entry->Last_Address = stat.mem_addr;
+    entry->Last_Address = mem_addr;
 }
 
 
