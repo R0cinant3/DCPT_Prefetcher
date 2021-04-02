@@ -27,7 +27,7 @@ static std::vector<DCPT_Entry *> List_of_Entries;
 
 static std::vector<Addr> Delta_Correlation(DCPT_Entry *);
 static std::vector<Addr> Prefetch_Filtering(DCPT_Entry *, std::vector<Addr>);
-static void Delta_Address_Calculation(AccessStat);
+static bool Delta_Address_Calculation(AccessStat);
 static void Delta_Address_Store_in_Buffer(AccessStat, int64_t);
 static DCPT_Entry* Create_New_Entry(AccessStat);
 static void Store_New_Entry(DCPT_Entry *);
@@ -58,24 +58,23 @@ void prefetch_access(AccessStat stat)
     static std::vector<Addr> Candidates;
     static std::vector<Addr> Prefetches;
     
-
     entry = Table_Look_Up(stat.pc);
+    bool delta_is_nonzero = false;
 
     if(entry == NULL)
     {
         entry = Create_New_Entry(stat);
         Store_New_Entry(entry);
     }
-    else
-        Delta_Address_Calculation(stat);
-    
-    Candidates = Delta_Correlation(entry);
-    Prefetches = Prefetch_Filtering(entry, Candidates);
+    else if(Delta_Address_Calculation(stat)){
+        Candidates = Delta_Correlation(entry);
+        Prefetches = Prefetch_Filtering(entry, Candidates);
 
-    std::vector<Addr>::iterator it_Prefetch = Prefetches.begin();
-    for(; it_Prefetch != Prefetches.end(); it_Prefetch++)     
-    {
-        issue_prefetch(*it_Prefetch);
+        std::vector<Addr>::iterator it_Prefetch = Prefetches.begin();
+        for(; it_Prefetch != Prefetches.end(); it_Prefetch++)     
+        {
+            issue_prefetch(*it_Prefetch);
+        }
     }
 }
 
@@ -142,15 +141,17 @@ static std::vector<Addr> Prefetch_Filtering(DCPT_Entry *entry, std::vector<Addr>
     return Prefetches;
 }
 
-static void Delta_Address_Calculation(AccessStat stat)
+static bool Delta_Address_Calculation(AccessStat stat)
 {
-    static int64_t Delta_Address;
-    Delta_Address = (int64_t)stat.mem_addr - (int64_t)entry->Last_Address;
+    int64_t Delta_Address = (int64_t)stat.mem_addr - (int64_t)entry->Last_Address;
     Delta_Address /= BLOCK_SIZE >> 1;
     if(Delta_Address != 0)
     {
         Delta_Address_Store_in_Buffer(stat, Delta_Address);
+        return true;
     }
+    else
+        return false;
 }
 
 static void Delta_Address_Store_in_Buffer(AccessStat stat, int64_t Delta_Address)
