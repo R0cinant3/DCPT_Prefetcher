@@ -27,8 +27,8 @@ static std::vector<DCPT_Entry *> List_of_Entries;
 
 static std::vector<Addr> Delta_Correlation(DCPT_Entry *);
 static std::vector<Addr> Prefetch_Filtering(DCPT_Entry *, std::vector<Addr>);
-static bool Delta_Address_Calculation(AccessStat);
-static void Delta_Address_Store_in_Buffer(AccessStat, int64_t);
+static bool Delta_Address_Calculation_is_Nonzero(AccessStat);
+static void Delta_Address_Store_in_Buffer(AccessStat, Addr);
 static DCPT_Entry* Create_New_Entry(AccessStat);
 static void Store_New_Entry(DCPT_Entry *);
 
@@ -59,14 +59,13 @@ void prefetch_access(AccessStat stat)
     static std::vector<Addr> Prefetches;
     
     entry = Table_Look_Up(stat.pc);
-    bool delta_is_nonzero = false;
 
     if(entry == NULL)
     {
         entry = Create_New_Entry(stat);
         Store_New_Entry(entry);
     }
-    else if(Delta_Address_Calculation(stat)){
+    else if(Delta_Address_Calculation_is_Nonzero(stat)){
         Candidates = Delta_Correlation(entry);
         Prefetches = Prefetch_Filtering(entry, Candidates);
 
@@ -141,9 +140,9 @@ static std::vector<Addr> Prefetch_Filtering(DCPT_Entry *entry, std::vector<Addr>
     return Prefetches;
 }
 
-static bool Delta_Address_Calculation(AccessStat stat)
+static bool Delta_Address_Calculation_is_Nonzero(AccessStat stat)
 {
-    int64_t Delta_Address = (int64_t)stat.mem_addr - (int64_t)entry->Last_Address;
+    Addr Delta_Address = stat.mem_addr - entry->Last_Address;
     Delta_Address /= BLOCK_SIZE >> 1;
     if(Delta_Address != 0)
     {
@@ -154,15 +153,15 @@ static bool Delta_Address_Calculation(AccessStat stat)
         return false;
 }
 
-static void Delta_Address_Store_in_Buffer(AccessStat stat, int64_t Delta_Address)
+static void Delta_Address_Store_in_Buffer(AccessStat stat, Addr Delta_Address)
 {
-    if(Delta_Address < 0 || Delta_Address > DELTA_MAX_VALUE)
+    if(Delta_Address > DELTA_MAX_VALUE)
         Delta_Address = 0;
 
     if(entry->deltas.size() == DELTA_BUFFER_LIMIT)
         entry->deltas.pop_front();
     
-    entry->deltas.push_back((Addr)Delta_Address);
+    entry->deltas.push_back(Delta_Address);
     entry->Last_Address = stat.mem_addr;
 }
 
