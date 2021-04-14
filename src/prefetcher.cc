@@ -5,10 +5,10 @@
 #include <algorithm>
 
 #include "interface.hh"
-
-#define ENTRY_BUFFER_LIMIT 100
-#define FLIGHT_BUFFER_LIMIT 32
-#define DELTA_BUFFER_LIMIT 6
+#include "parameters.hh"
+//#define ENTRY_BUFFER_LIMIT 100
+//#define ACTIVE_REQUEST_BUFFER_LIMIT 0
+//#define DELTA_BUFFER_LIMIT 6
 #define DELTA_NUMBER_BITS 10
 #define DELTA_MAX_VALUE ((1 << (DELTA_NUMBER_BITS - 1)) - 1)
 
@@ -19,10 +19,11 @@ struct DCPT_Entry
     DCPT_Entry()        : Last_Address(0), Last_Prefetch(0), pc(0){}
     Addr Last_Address, Last_Prefetch, pc;
     std::deque<Addr> deltas;
+    //PC = Special-purpose register that is used by the processor to hold the address of the next instruction to be executed. 
 };
 
 static DCPT_Entry *entry;
-static std::deque<Addr> inFlight;
+static std::deque<Addr> ActivePrefetches_in_RequestQueue;
 static std::vector<DCPT_Entry *> List_of_Entries;
 
 static std::vector<Addr> Delta_Correlation(DCPT_Entry *);
@@ -49,7 +50,7 @@ void prefetch_init(void)
     /* This is the place to initialize data structures. */
     entry = new DCPT_Entry;
     List_of_Entries.clear();
-    inFlight.clear();
+    ActivePrefetches_in_RequestQueue.clear();
     DPRINTF(HWPrefetch, "Initialized sequential-on-access prefetcher\n");
 }
 
@@ -83,9 +84,9 @@ void prefetch_complete(Addr addr)
      * Called when a block requested by the prefetcher has been loaded.
      */
 
-    std::deque<Addr>::iterator it_inFlight = std::find(inFlight.begin(), inFlight.end(), addr);
-    if(it_inFlight != inFlight.end())
-        inFlight.erase(it_inFlight); 
+    std::deque<Addr>::iterator it_ActivePrefetches_in_RequestQueue = std::find(ActivePrefetches_in_RequestQueue.begin(), ActivePrefetches_in_RequestQueue.end(), addr);
+    if(it_ActivePrefetches_in_RequestQueue != ActivePrefetches_in_RequestQueue.end())
+       ActivePrefetches_in_RequestQueue.erase(it_ActivePrefetches_in_RequestQueue); 
     
 }
 
@@ -127,14 +128,14 @@ static std::vector<Addr> Prefetch_Filtering(DCPT_Entry *entry, std::vector<Addr>
     std::vector<Addr>::iterator it_Candidate = Candidates.begin();
     for(; it_Candidate != Candidates.end(); it_Candidate++)
     {
-        if((std::find(inFlight.begin(), inFlight.end(), *it_Candidate) == inFlight.end()) && !in_cache(*it_Candidate) && !in_mshr_queue(*it_Candidate))
+        if((std::find(ActivePrefetches_in_RequestQueue.begin(), ActivePrefetches_in_RequestQueue.end(), *it_Candidate) == ActivePrefetches_in_RequestQueue.end()) && !in_cache(*it_Candidate) && !in_mshr_queue(*it_Candidate))
         {//Candidate is not in MSHR, Cache, or "other prefetch requests that are
-        //not completed" buffer(inFlight)
+        //not completed" buffer(ActivePrefetches_in_RequestQueue)
             Prefetches.push_back(*it_Candidate);
             entry->Last_Prefetch = *it_Candidate;
-            if(inFlight.size() == FLIGHT_BUFFER_LIMIT)
-                inFlight.pop_front();
-            inFlight.push_back(*it_Candidate);
+            if(ActivePrefetches_in_RequestQueue.size() < ACTIVE_REQUEST_BUFFER_LIMIT)
+                ActivePrefetches_in_RequestQueue.push_back(*it_Candidate);
+            //    ActivePrefetches_in_RequestQueue.pop_front();
         }
     }
     return Prefetches;
